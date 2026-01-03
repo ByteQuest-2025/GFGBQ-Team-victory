@@ -21,6 +21,7 @@ export default function VoiceShield() {
   const [view, setView] = useState<'dashboard' | 'active' | 'summary'>('dashboard');
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
+  const [selectedLang, setSelectedLang] = useState('en-IN');
   const [risk, setRisk] = useState<RiskResult>({
     risk_score: 0,
     risk_label: 'SAFE',
@@ -68,7 +69,7 @@ export default function VoiceShield() {
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-IN'; // Optimized for Indian English/Hinglish
+    recognitionRef.current.lang = selectedLang;
 
     recognitionRef.current.onresult = (event: any) => {
       const result = event.results[event.results.length - 1];
@@ -130,6 +131,36 @@ export default function VoiceShield() {
         <button className="btn btn-primary" onClick={() => { setView('active'); startSpeechRecognition(); }}>
           <span style={{ fontSize: '1.4rem' }}>🛡️</span> Start Secure Call
         </button>
+
+        <div style={{ marginTop: '1.5rem' }}>
+          <div className="label-small">Select Call Language</div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            {[
+              { label: 'English/Mix', val: 'en-IN' },
+              { label: 'Hindi', val: 'hi-IN' },
+              { label: 'Telugu', val: 'te-IN' },
+              { label: 'Tamil', val: 'ta-IN' }
+            ].map(lang => (
+              <button
+                key={lang.val}
+                onClick={() => setSelectedLang(lang.val)}
+                style={{
+                  padding: '10px 15px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-color)',
+                  background: selectedLang === lang.val ? 'var(--primary-color)' : 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  fontSize: '0.8rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {lang.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="glass-card" style={{ marginTop: '1.5rem' }}>
@@ -204,9 +235,10 @@ export default function VoiceShield() {
       </button>
 
       {/* Demo Simulation Buttons */}
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-        <button onClick={() => simulateScam('otp')} className="btn btn-outline" style={{ fontSize: '0.8rem' }}>Simulate OTP Ask</button>
-        <button onClick={() => simulateScam('safe')} className="btn btn-outline" style={{ fontSize: '0.8rem' }}>Simulate Safe</button>
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '2rem' }}>
+        <button onClick={() => simulateScam('otp')} className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '8px' }}>Simulate OTP Ask (EN)</button>
+        <button onClick={() => simulateScam('telugu')} className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '8px' }}>Simulate OTP Ask (TE)</button>
+        <button onClick={() => simulateScam('safe')} className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '8px' }}>Simulate Safe</button>
       </div>
     </div>
   );
@@ -251,8 +283,12 @@ export default function VoiceShield() {
   );
 
   // Simulation Helper
-  const simulateScam = (type: 'otp' | 'safe') => {
-    const text = type === 'otp' ? "Please tell me the 6 digit OTP sent to your number to update your KYC immediately or your account will be blocked." : "Hello, am I speaking with Mr. Kumar? I am calling regarding your recent query about the bank statement.";
+  const simulateScam = (type: 'otp' | 'safe' | 'telugu') => {
+    let text = "";
+    if (type === 'otp') text = "Please tell me the 6 digit OTP sent to your number to update your KYC immediately.";
+    if (type === 'telugu') text = "Mee number ki vachina 6 digit OTP cheppandi, lekapothe mee account block avthundi.";
+    if (type === 'safe') text = "Hello, I am calling regarding your recent bank statement query.";
+
     const newLine: TranscriptLine = {
       speaker: 'caller',
       text: text,

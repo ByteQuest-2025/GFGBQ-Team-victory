@@ -92,7 +92,19 @@ OUTPUT FORMAT (JSON ONLY):
         # Hindi/Hinglish Scam Keywords
         hindi_scam_words = [
             "khata band", "police case", "jail", "link pe click", 
-            "paisa won", "inam", "batchiye", "nikal jayega"
+            "paisa won", "inam", "batchiye", "nikal jayega", "otpee bataye"
+        ]
+
+        # Telugu Scam Keywords
+        telugu_scam_words = [
+            "otp cheppandi", "cheppandi", "khata block", "paisa vachindi", 
+            "gelicharu", "download cheyyandi", "anydesk ekkinchandi"
+        ]
+
+        # Tamil Scam Keywords
+        tamil_scam_words = [
+            "otp sollunga", "sollunga", "panam", "parisu", 
+            "vettri", "download pannunga", "account thadai"
         ]
 
         detected_triggers = []
@@ -112,11 +124,11 @@ OUTPUT FORMAT (JSON ONLY):
                 score += 15
                 detected_triggers.append("URGENCY_SCAM")
 
-        # Check for Hindi Scam
-        for word in hindi_scam_words:
+        # Check for Regional Scam Patterns
+        for word in hindi_scam_words + telugu_scam_words + tamil_scam_words:
             if word in full_text:
-                score += 25
-                detected_triggers.append("HINDI_FRAUD_PATTERN")
+                score += 30
+                detected_triggers.append("REGIONAL_FRAUD_PATTERN")
 
         # Deduplicate triggers
         detected_triggers = list(set(detected_triggers)) if detected_triggers else ["NO_RISK_DETECTED"]
