@@ -18,7 +18,12 @@ interface TranscriptLine {
 
 export default function VoiceShield() {
   // State
+  const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<'dashboard' | 'active' | 'summary'>('dashboard');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [selectedLang, setSelectedLang] = useState('en-IN');
@@ -299,6 +304,8 @@ export default function VoiceShield() {
       socketRef.current.send(JSON.stringify({ type: 'transcript', payload: newLine }));
     }
   };
+
+  if (!mounted) return null;
 
   return (
     <main>
