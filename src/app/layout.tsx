@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VoiceShield v4.2 - Real-Time Scam Call Defender",
+  title: "VoiceShield v4.3 - Real-Time Scam Call Defender",
   description: "AI-powered real-time audio fraud detection for scam prevention.",
 };
 

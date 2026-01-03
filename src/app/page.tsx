@@ -1,5 +1,5 @@
 'use client';
-// Version 4.3.0 - UI Overhaul: Matching Requested Feature Cards & Hero
+// Version 4.3.1 - UI Overhaul: Matching Requested Feature Cards & Hero
 
 
 import { useState, useEffect, useRef } from 'react';
