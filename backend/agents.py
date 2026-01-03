@@ -45,10 +45,18 @@ OUTPUT FORMAT (JSON ONLY):
 
     async def analyze_transcript(self, transcript_history: List[dict]) -> RiskResult:
         """
-        Uses Google Gemini for advanced analysis, falling back to rule-based if needed.
+        Uses a Hybrid approach: Rule-based for immediate overrides + Gemini for nuance.
         """
+        # 1. First, run Rule-based check as a safety layer
+        rule_result = self.rule_based_analyze(transcript_history)
+        
+        # 2. If it's already HIGH risk based on keywords, override Gemini immediately
+        if rule_result.risk_label == "HIGH":
+            return rule_result
+
+        # 3. If no high risk keywords, use Gemini for deeper intent analysis
         if not self.api_key:
-            return self.rule_based_analyze(transcript_history)
+            return rule_result
 
         try:
             formatted_history = "\n".join([
@@ -59,7 +67,6 @@ OUTPUT FORMAT (JSON ONLY):
             prompt = f"{self.system_prompt}\n\nConversation so far:\n{formatted_history}\n\nAnalyze and return JSON:"
             
             response = self.model.generate_content(prompt)
-            # Find JSON in the response (sometimes Gemini wraps it in ```json)
             raw_text = response.text
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -67,10 +74,17 @@ OUTPUT FORMAT (JSON ONLY):
                 raw_text = raw_text[raw_text.find("{"):raw_text.rfind("}")+1]
 
             result_data = json.loads(raw_text)
+            
+            # Safety Layer: If rule-based detected MEDIUM but Gemini says SAFE, promote back to MEDIUM
+            if rule_result.risk_label == "MEDIUM" and result_data.get("risk_label") == "SAFE":
+                result_data["risk_label"] = "MEDIUM"
+                result_data["risk_score"] = max(rule_result.risk_score, result_data["risk_score"])
+                result_data["explanation"] = "AI was unsure, but VoiceShield detected suspicious keywords."
+
             return RiskResult(**result_data)
         except Exception as e:
             print(f"Gemini Error: {e}")
-            return self.rule_based_analyze(transcript_history)
+            return rule_result
 
     def rule_based_analyze(self, history: List[dict]) -> RiskResult:
         """Robust fallback rule-based engine for real-time scam detection."""
@@ -113,21 +127,21 @@ OUTPUT FORMAT (JSON ONLY):
         # Check for High Risk
         for word in high_risk_words:
             if word in full_text:
-                score += 40
+                score += 80  # Drastically increase score for critical threats
                 if "otp" in word or "code" in word: detected_triggers.append("REQUEST_OTP")
                 if "pin" in word: detected_triggers.append("REQUEST_UPI_PIN")
-                if "anydesk" in word: detected_triggers.append("REMOTE_ACCESS")
+                if "anydesk" in word or "share" in word: detected_triggers.append("REMOTE_ACCESS")
 
         # Check for Medium Risk
         for word in med_risk_words:
             if word in full_text:
-                score += 15
+                score += 30
                 detected_triggers.append("URGENCY_SCAM")
 
         # Check for Regional Scam Patterns
         for word in hindi_scam_words + telugu_scam_words + tamil_scam_words:
             if word in full_text:
-                score += 30
+                score += 50
                 detected_triggers.append("REGIONAL_FRAUD_PATTERN")
 
         # Deduplicate triggers
