@@ -1,10 +1,9 @@
 'use client';
-// Version 4.1.2 - Forced Refresh
+// Version 4.2.0 - UI Streamlining: Removed Welcome Hero
 
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WelcomeScreen } from '@/components/ui/onboarding-welcome-screen';
 import { Button } from '@/components/ui/button';
 import { Settings, X, Shield, ShieldCheck, ShieldAlert, AlertTriangle, Globe, MessageSquare } from 'lucide-react';
 
@@ -27,7 +26,9 @@ const translations = {
     safety_tips: "Safety Recommendations",
     action_item_1: "Never share OTP, PIN, or CVV over a call.",
     action_item_2: "Banks never ask for remote access to your phone.",
-    action_item_3: "If suspicious, block the number and report to 1930."
+    action_item_3: "If suspicious, block the number and report to 1930.",
+    start_secure: "START SECURE",
+    ready_title: "VOICESHIELD PROTECTOR"
   },
   te: {
     welcome_title: "వాయిస్ షీల్డ్ కి స్వాగతం",
@@ -46,7 +47,9 @@ const translations = {
     safety_tips: "భద్రతా సూచనలు",
     action_item_1: "కాల్‌లో ఎప్పుడూ OTP, PIN లేదా CVV ని షేర్ చేయవద్దు.",
     action_item_2: "బ్యాంకులు మీ ఫోన్‌కు రిమోట్ యాక్సెస్‌ను ఎప్పుడూ అడగవు.",
-    action_item_3: "అనుమానం ఉంటే, నంబర్‌ను బ్లాక్ చేసి 1930 కి నివేదించండి."
+    action_item_3: "అనుమానం ఉంటే, నంబర్‌ను బ్లాక్ చేసి 1930 కి నివేదించండి.",
+    start_secure: "భద్రతను ప్రారంభించండి",
+    ready_title: "వాయిస్ షీల్డ్ ప్రొటెక్టర్"
   },
   hi: {
     welcome_title: "VoiceShield में आपका स्वागत है",
@@ -65,7 +68,9 @@ const translations = {
     safety_tips: "सुरक्षा अनुशंसाएँ",
     action_item_1: "कॉल पर कभी भी OTP, PIN या CVV साझा न करें।",
     action_item_2: "बैंक कभी भी आपके फोन का रिमोट एक्सेस नहीं मांगते।",
-    action_item_3: "मैनेजर बनकर कॉल करने वालों से सावधान रहें।"
+    action_item_3: "मैनेजर बनकर कॉल करने वालों से सावधान रहें।",
+    start_secure: "सुरक्षा शुरू करें",
+    ready_title: "VoiceShield रक्षक"
   }
 };
 
@@ -79,7 +84,8 @@ interface RiskResult {
 
 export default function VoiceShield() {
   const [mounted, setMounted] = useState(false);
-  const [view, setView] = useState<'welcome' | 'monitoring' | 'active' | 'summary'>('welcome');
+  const [view, setView] = useState<'monitoring' | 'active' | 'summary'>('monitoring');
+  const [isStarted, setIsStarted] = useState(false);
   const [lang, setLang] = useState<'en' | 'te' | 'hi'>('en');
   const [showSettings, setShowSettings] = useState(false);
   const [risk, setRisk] = useState<RiskResult>({
@@ -169,43 +175,79 @@ export default function VoiceShield() {
 
       <AnimatePresence mode="wait">
 
-        {/* --- STAGE 1: WELCOME SCREEN (As Requested) --- */}
-        {view === 'welcome' && (
-          <motion.div key="welcome" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-screen w-full">
-            <WelcomeScreen
-              imageUrl="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=1470&auto=format&fit=crop"
-              title={<>{t.welcome_title} <span className="text-primary italic">AI</span></>}
-              description={t.welcome_desc}
-              buttonText={t.start_btn}
-              onButtonClick={() => setView('monitoring')}
-            />
-          </motion.div>
-        )}
 
         {/* --- STAGE 2: PASSIVE MONITORING (6 DAYS) --- */}
         {view === 'monitoring' && (
-          <motion.div key="monitoring" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center h-screen p-8 text-center">
-            <div className="relative mb-8">
-              <div className="absolute inset-0 bg-primary/20 rounded-full blur-3xl animate-pulse"></div>
-              <Shield className="w-32 h-32 text-primary relative z-10" />
+          <motion.div key="monitoring" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center min-h-screen p-8 text-center relative">
+
+            {/* Background Glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+
+            <div className="relative mb-12">
+              <motion.div
+                animate={isStarted ? { scale: [1, 1.05, 1], rotate: [0, 1, -1, 0] } : {}}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="relative z-10"
+              >
+                {isStarted ? (
+                  <ShieldCheck className="w-40 h-40 text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />
+                ) : (
+                  <Shield className="w-40 h-40 text-slate-700" />
+                )}
+              </motion.div>
+              {isStarted && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-2 -right-2 bg-primary w-6 h-6 rounded-full border-4 border-slate-950 animate-pulse"
+                />
+              )}
             </div>
 
-            <h2 className="text-3xl font-black mb-4 tracking-tighter uppercase">{t.monitoring_title}</h2>
-            <p className="text-slate-400 max-w-sm mb-12 text-sm leading-relaxed">{t.monitoring_desc}</p>
+            <h2 className="text-4xl font-black mb-4 tracking-tighter uppercase max-w-md">
+              {isStarted ? t.monitoring_title : t.ready_title}
+            </h2>
+            <p className="text-slate-400 max-w-sm mb-12 text-sm font-medium leading-relaxed">
+              {isStarted ? t.monitoring_desc : "Advanced AI-powered real-time scam detection. Press below to arm your security."}
+            </p>
 
-            <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3">
-              <span className="w-3 h-3 bg-primary rounded-full animate-pulse shadow-[0_0_10px_var(--primary-color)]"></span>
-              <span className="text-xs font-black uppercase tracking-widest text-primary">{t.six_day_alert}</span>
-            </div>
-
-            {/* Simulation Triggers for Demo */}
-            <div className="fixed bottom-12 flex flex-col gap-3">
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">Demo Simulation</p>
-              <div className="flex gap-2">
-                <Button variant="outline" className="text-[10px] border-white/5 bg-white/5" onClick={() => simulateCall(false)}>Normal Call</Button>
-                <Button variant="destructive" className="text-[10px]" onClick={() => simulateCall(true)}>Scam Call</Button>
+            {!isStarted ? (
+              <Button
+                onClick={() => setIsStarted(true)}
+                className="h-20 px-12 rounded-[28px] text-xl font-black bg-primary hover:bg-primary/90 shadow-[0_20px_40px_-10px_rgba(var(--primary),0.3)] transform active:scale-95 transition-all mb-8 w-full max-w-xs"
+              >
+                {t.start_secure}
+              </Button>
+            ) : (
+              <div className="bg-white/5 border border-white/10 p-5 rounded-3xl flex items-center gap-4 mb-8">
+                <div className="w-3 h-3 bg-primary rounded-full animate-pulse shadow-[0_0_15px_var(--primary-color)]"></div>
+                <div className="text-left">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-primary opacity-80">SYSTEM ARMED</div>
+                  <div className="text-xs font-bold text-white">{t.six_day_alert}</div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Simulation Triggers for Demo (Only visible when started) */}
+            {isStarted && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="fixed bottom-12 flex flex-col gap-3"
+              >
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">Demo Simulation</p>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="text-[10px] border-white/5 bg-white/10 h-10 px-6 rounded-xl font-black" onClick={() => simulateCall(false)}>NORMAL CALL</Button>
+                  <Button variant="destructive" className="text-[10px] h-10 px-6 rounded-xl font-black bg-red-600 hover:bg-red-500" onClick={() => simulateCall(true)}>SCAM CALL</Button>
+                </div>
+              </motion.div>
+            )}
+
+            {!isStarted && (
+              <footer className="mt-8 text-slate-600 font-black uppercase text-[10px] tracking-[0.3em]">
+                {t.developed_by}
+              </footer>
+            )}
           </motion.div>
         )}
 
@@ -321,7 +363,7 @@ export default function VoiceShield() {
               </div>
             </div>
 
-            <Button onClick={() => setView('welcome')} variant="ghost" className="w-full mt-12 h-16 rounded-[24px] border-white/10 text-slate-500 font-black uppercase text-[10px] tracking-[0.5em]">
+            <Button onClick={() => { setView('monitoring'); setIsStarted(false); }} variant="ghost" className="w-full mt-12 h-16 rounded-[24px] border-white/10 text-slate-500 font-black uppercase text-[10px] tracking-[0.5em]">
               RESET SYSTEM STATE
             </Button>
 
