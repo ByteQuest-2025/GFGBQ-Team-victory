@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { WelcomeScreen } from '@/components/ui/welcome-screen';
+import { Button } from '@/components/ui/button';
+import { Shield, ShieldAlert, ShieldCheck, MessageSquare, PhoneIncoming, AlertTriangle } from 'lucide-react';
 
 // --- Types ---
 interface RiskResult {
@@ -22,67 +26,49 @@ interface ChatMessage {
 }
 
 export default function VoiceShield() {
-  // State
   const [mounted, setMounted] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'active' | 'summary'>('dashboard');
+  const [view, setView] = useState<'welcome' | 'monitoring' | 'active' | 'summary'>('welcome');
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [selectedLang, setSelectedLang] = useState('en-IN');
   const [risk, setRisk] = useState<RiskResult>({
     risk_score: 0,
     risk_label: 'SAFE',
-    explanation: 'No scam patterns detected yet. VoiceShield is monitoring.',
+    explanation: 'VoiceShield is monitoring for threats...',
     triggers: []
   });
 
   // Chatbot State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'ai', text: 'Hello! I am your AI Fraud Security Assistant. How can I help you stay safe today?' }
+    { role: 'ai', text: 'Hello! I am your AI Fraud Advisor. I am here to answer your questions about security. How can I help?' }
   ]);
   const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Refs
   const socketRef = useRef<WebSocket | null>(null);
   const recognitionRef = useRef<any>(null);
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const silenceTimer = useRef<any>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Persistent Mode: Auto-restart Speech Recognition if it stops
+  // Persistent Monitoring Logic
   useEffect(() => {
-    if (isListening && mounted) {
-      const interval = setInterval(() => {
-        try {
-          // If the recognition stopped but state says we're listening, restart it
-          if (recognitionRef.current) {
-            recognitionRef.current.start();
-          }
-        } catch (e) {
-          // Suppress noise if already started
-        }
-      }, 5000); // Check every 5 seconds to ensure "Always Active" mode
-      return () => clearInterval(interval);
+    if (view === 'monitoring' && mounted) {
+      if (!isListening) {
+        startSpeechRecognition();
+      }
     }
-  }, [isListening, mounted]);
-
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  }, [view, isListening, mounted]);
 
   // WebSocket Connection
   useEffect(() => {
     if (!mounted) return;
 
-    if (view === 'active') {
-      const callId = Math.random().toString(36).substring(7);
+    // Always keep socket ready if in monitoring or active
+    if (view === 'monitoring' || view === 'active') {
+      const callId = "persist_" + Math.random().toString(36).substring(7);
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = `${protocol}://${window.location.hostname}:8000/ws/call/${callId}`;
 
@@ -91,10 +77,22 @@ export default function VoiceShield() {
         socketRef.current.onmessage = (event) => {
           const data = JSON.parse(event.data);
           if (data.type === 'risk_update') {
-            setRisk(data.payload);
+            const newRisk = data.payload;
+            setRisk(newRisk);
+
+            // If risk is detected, automatically transition to Active View (Page 3)
+            if (newRisk.risk_label === 'HIGH' || newRisk.risk_label === 'MEDIUM') {
+              setView('active');
+            }
           }
         };
-      } catch (e) { console.error('WS Error', e); }
+        socketRef.current.onclose = () => {
+          if (view === 'monitoring' || view === 'active') {
+            // Attempt reconnect
+            setTimeout(() => setMounted(m => !m), 3000);
+          }
+        };
+      } catch (e) { console.error(e); }
 
       return () => { socketRef.current?.close(); };
     }
@@ -120,14 +118,21 @@ export default function VoiceShield() {
         };
         setTranscript(prev => [...prev, newLine]);
 
+        // Send to backend
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           socketRef.current.send(JSON.stringify({ type: 'transcript', payload: newLine }));
         }
+
+        // If we hear "hello" or activity while in monitoring, we can potentially trigger 'active' 
+        // but for now we follow the risk-based trigger.
       }
     };
 
-    recognitionRef.current.onerror = () => { /* Prevent crash loops */ };
-    recognitionRef.current.onend = () => { if (isListening) recognitionRef.current?.start(); };
+    recognitionRef.current.onend = () => {
+      if (view === 'monitoring' || view === 'active') {
+        try { recognitionRef.current.start(); } catch (e) { }
+      }
+    };
 
     try {
       recognitionRef.current.start();
@@ -135,235 +140,227 @@ export default function VoiceShield() {
     } catch (e) { console.error(e); }
   };
 
-  const stopProtection = () => {
-    setIsListening(false);
-    recognitionRef.current?.stop();
-    setView('summary');
-  };
-
-  const handleChatSubmit = async (e: React.FormEvent) => {
+  const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
-    const userMsg: ChatMessage = { role: 'user', text: chatInput };
-    setChatMessages(prev => [...prev, userMsg]);
+    const userMsg = chatInput.toLowerCase();
+    setChatMessages(prev => [...prev, { role: 'user', text: chatInput }]);
     setChatInput('');
-    setIsChatLoading(true);
 
-    try {
-      // Simulate AI response based on user questions
-      let aiResponse = "I recommend you never share sensitive info like OTP or PIN. If you have been defrauded, immediately block your accounts and contact cybercrime police (1930).";
+    let aiResponse = "As your advisor, I suggest being extremely careful with callers asking for info. Please report this to 1930.";
 
-      const input = userMsg.text.toLowerCase();
-      if (input.includes('otp')) aiResponse = "NEVER SHARE YOUR OTP. No bank employee or official will ever ask for it. It is the final key to your money.";
-      if (input.includes('link')) aiResponse = "Don't click unknown links in SMS or WhatsApp. They can install viruses or clone your phone session.";
-      if (input.includes('upi') || input.includes('pin')) aiResponse = "Your UPI PIN is only for PAYMENT, not for receiving money. If someone asks for your PIN to 'refund' money, they are scamming you.";
-      if (input.includes('bank details') || input.includes('leaked')) aiResponse = "If your details are leaked, immediately use your bank's app to Freeze/Lock your cards. Change all passwords and inform the bank branch.";
+    if (userMsg.includes('otp')) aiResponse = "NEVER SHARE YOUR OTP. Banks will never ask for it. It is for your eyes only.";
+    if (userMsg.includes('upi') || userMsg.includes('pin')) aiResponse = "UPI PIN is only used to SEND money, never to RECEIVE. If someone asks for your PIN to 'refund', they are scammers.";
+    if (userMsg.includes('leak') || userMsg.includes('money gone')) aiResponse = "If money is gone, immediately call 1930 (National Cyber Crime Helpline) and freeze your bank cards via your official bank app.";
+    if (userMsg.includes('fraud detector')) aiResponse = "VoiceShield uses advanced AI to detect tone, urgency, and keywords to identify scammers before you share anything.";
+    if (userMsg.includes('bank man') || userMsg.includes('sized')) aiResponse = "Real bank managers will never call you to ask for PINs or passwords. They will always ask you to visit the branch for such issues.";
+    if (userMsg.includes('link')) aiResponse = "NEVER click unknown links in messages. They can clone your SIM or access your mobile banking apps.";
+    if (userMsg.includes('hi') || userMsg.includes('hello')) aiResponse = "Welcome to VoiceShield! How can I help you regarding call security today?";
+    if (userMsg.includes('bye')) aiResponse = "Stay safe! Remember, VoiceShield is here to protect you from scammers. Goodbye!";
 
-      setTimeout(() => {
-        setChatMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
-        setIsChatLoading(false);
-      }, 800);
-    } catch (e) {
-      setIsChatLoading(false);
-    }
+    setTimeout(() => {
+      setChatMessages(prev => [...prev, { role: 'ai', text: aiResponse }]);
+    }, 500);
   };
 
-  const simulateScam = (type: 'otp' | 'safe' | 'telugu') => {
-    let text = "";
-    if (type === 'otp') text = "Please tell me the 6 digit OTP sent to your number to update your KYC immediately.";
-    if (type === 'telugu') text = "Mee number ki vachina 6 digit OTP cheppandi, lekapothe mee account block avthundi.";
-    if (type === 'safe') text = "Hello, I am calling regarding your recent bank statement query.";
+  const simulateCallTrigger = () => {
+    setView('active');
+    // Force a "safe" state initially
+    setRisk({ risk_score: 5, risk_label: 'SAFE', explanation: 'Call detected. Monitoring conversation...', triggers: [] });
+  };
 
-    const newLine: TranscriptLine = { speaker: 'caller', text: text, timestamp: new Date().toLocaleTimeString() };
-    setTranscript(prev => [...prev, newLine]);
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'transcript', payload: newLine }));
-    }
+  const simulateScamTrigger = () => {
+    setView('active');
+    setRisk({
+      risk_score: 95,
+      risk_label: 'HIGH',
+      explanation: 'CRITICAL THREAT: Caller is asking for OTP/Sensitive Access.',
+      triggers: ['REQUEST_OTP']
+    });
   };
 
   if (!mounted) return null;
 
   return (
-    <main>
-      {view === 'dashboard' && (
-        <div className="animate-fade-in">
-          <div className="text-center mb-8 mt-12">
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '-1.5px' }}>
-              Voice<span style={{ color: 'var(--primary-color)' }}>Shield</span>
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Secure Call Defender</p>
-          </div>
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30">
+      <AnimatePresence mode="wait">
 
-          <div className="glass-card">
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1rem' }}>Ready to Protect</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-              VoiceShield (v2.0 Premium) monitors your phone calls 24/7. This session is set to be <b>Always Active</b> for max security.
+        {/* --- PAGE 1: WELCOME --- */}
+        {view === 'welcome' && (
+          <motion.div key="welcome" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-screen w-full">
+            <WelcomeScreen
+              imageUrl="https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=1000&auto=format&fit=crop"
+              title={<>Welcome to <span className="text-primary italic">VoiceShield</span> AI</>}
+              description="Protecting you from fraud calls in real-time. Always active, always secure. Developed by Penjendru Varun."
+              buttonText="Start Secure Protection"
+              onButtonClick={() => setView('monitoring')}
+            />
+          </motion.div>
+        )}
+
+        {/* --- PAGE 2: MONITORING (6 DAYS PERSISTENCE) --- */}
+        {view === 'monitoring' && (
+          <motion.div key="monitoring" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center h-screen p-8 text-center bg-slate-950">
+            <div className="relative mb-8">
+              <div className="absolute inset-0 bg-primary/20 rounded-full blur-3xl animate-pulse"></div>
+              <Shield className="w-24 h-24 text-primary relative z-10" />
+            </div>
+
+            <h2 className="text-2xl font-black mb-4 tracking-tighter">AI MONITORING ACTIVE</h2>
+            <p className="text-slate-400 max-w-sm mb-8 text-sm leading-relaxed">
+              VoiceShield is listening for incoming calls. This session will remain active for up to 6 days. Keep your phone on speakerphone when talking.
             </p>
 
-            <button className="btn btn-primary" onClick={() => { setView('active'); startSpeechRecognition(); }}>
-              <span style={{ fontSize: '1.4rem' }}>🛡️</span> Start Secure Protection
-            </button>
-
-            <div style={{ marginTop: '1.5rem' }}>
-              <div className="label-small">Detection Language</div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                {['en-IN', 'hi-IN', 'te-IN', 'ta-IN'].map(lang => (
-                  <button key={lang} onClick={() => setSelectedLang(lang)} className={selectedLang === lang ? 'lang-btn active' : 'lang-btn'}>
-                    {lang.split('-')[0].toUpperCase()}
-                  </button>
-                ))}
-              </div>
+            <div className="flex gap-4 mb-2">
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0s]"></div>
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0.2s]"></div>
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0.4s]"></div>
             </div>
-          </div>
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Awaiting Audio Input</span>
 
-          <div className="glass-card" style={{ marginTop: '1.1rem', opacity: 0.8 }}>
-            <div className="label-small">SYSTEM STATUS</div>
-            <div style={{ fontSize: '0.85rem' }}>🟢 High-Intensity Backend Running...</div>
-          </div>
-        </div>
-      )}
-
-      {view === 'active' && (
-        <div className="animate-fade-in">
-          <div className="text-center pt-8">
-            <div className="status-badge status-on" style={{ animation: 'pulse 1.5s infinite' }}>
-              ⚡ ALWAYS ACTIVE MODE enabled
+            {/* Hidden triggers for demo */}
+            <div className="fixed bottom-12 flex gap-2">
+              <Button variant="ghost" className="text-[10px] opacity-20 hover:opacity-100" onClick={simulateCallTrigger}>Test Call</Button>
+              <Button variant="ghost" className="text-[10px] opacity-20 hover:opacity-100" onClick={simulateScamTrigger}>Test Scam</Button>
             </div>
-          </div>
+          </motion.div>
+        )}
 
-          <div className={`risk-indicator ${risk.risk_label === 'MEDIUM' ? 'suspicious' : risk.risk_label === 'HIGH' ? 'danger' : ''}`}>
-            <span style={{ fontSize: '3rem' }}>
-              {risk.risk_label === 'HIGH' ? '🚨' : risk.risk_label === 'MEDIUM' ? '⚠️' : '🛡️'}
-            </span>
-            <div className="risk-label" style={{
-              color: risk.risk_label === 'HIGH' ? 'var(--danger-color)' : risk.risk_label === 'MEDIUM' ? 'var(--suspicious-color)' : 'var(--safe-color)'
-            }}>
-              {risk.risk_label === 'HIGH' ? 'DANGER DETECTED' : risk.risk_label === 'MEDIUM' ? 'SUSPICIOUS ACTIVITY' : 'SECURE CALL'}
+        {/* --- PAGE 3: ACTIVE FLAG INDICATOR (THE FULL PAGE ALERT) --- */}
+        {view === 'active' && (
+          <motion.div
+            key="active"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`h-screen w-full flex flex-col items-center justify-center p-6 transition-colors duration-500 ${risk.risk_label === 'HIGH' ? 'bg-red-600' : 'bg-green-500'}`}
+          >
+            {/* LARGE FLAG ANIMATION */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
+              <div className="moving-flag text-9xl">🚩</div>
+              <div className="moving-flag text-9xl [animation-delay:1.5s] mt-48">🚩</div>
             </div>
-          </div>
 
-          <div className="glass-card" style={{ borderColor: risk.risk_label === 'HIGH' ? 'var(--danger-color)' : 'var(--border-color)' }}>
-            <div className="label-small">AI SECURITY ADVISOR</div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-              {risk.risk_label === 'HIGH' ? '🛑 HANG UP NOW' : 'Listening...'}
-            </h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{risk.explanation}</p>
-          </div>
-
-          <div className="label-small" style={{ marginLeft: '0.5rem' }}>REAL-TIME ANALYSIS</div>
-          <div className="glass-card" style={{ padding: '1rem', height: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            {transcript.map((line, i) => (
-              <div key={i} className={`transcript-line ${line.speaker === 'user' ? 'transcript-user' : 'transcript-caller'}`}>
-                {line.text}
-              </div>
-            ))}
-            <div ref={transcriptEndRef} />
-          </div>
-
-          <button className="btn btn-danger" onClick={stopProtection} style={{ marginTop: '1rem' }}>
-            Stop & View Summary
-          </button>
-
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-            <button onClick={() => simulateScam('otp')} className="btn btn-outline" style={{ fontSize: '0.7rem' }}>Simulate OTP (EN)</button>
-            <button onClick={() => simulateScam('telugu')} className="btn btn-outline" style={{ fontSize: '0.7rem' }}>Simulate OTP (TE)</button>
-          </div>
-        </div>
-      )}
-
-      {view === 'summary' && (
-        <div className="animate-fade-in" style={{ position: 'relative', overflow: 'hidden' }}>
-          {/* Flag Animations */}
-          <div className="flag-animation" style={{ color: risk.risk_label === 'HIGH' ? '#ef4444' : '#22c55e' }}>🚩</div>
-          <div className="flag-animation" style={{ color: risk.risk_label === 'HIGH' ? '#ef4444' : '#22c55e', animationDelay: '2s' }}>🚩</div>
-
-          <div className="text-center mb-6 mt-10">
-            <h2 style={{ fontSize: '2rem', fontWeight: 900 }}>Session Report</h2>
-          </div>
-
-          <div className={`glass-card ${risk.risk_label === 'HIGH' ? 'summary-risk-card' : 'summary-safe-card'}`} style={{ textAlign: 'center' }}>
-            <span style={{ fontSize: '3rem' }}>{risk.risk_label === 'HIGH' ? '🚨' : '🛡️'}</span>
-            <div style={{ fontSize: '1.8rem', fontWeight: 900, marginTop: '10px' }}>
-              {risk.risk_label === 'HIGH' ? 'HIGH RISK DETECTED' : 'CLEAN SESSION'}
+            <div className="text-9xl mb-8 drop-shadow-2xl">
+              {risk.risk_label === 'HIGH' ? '🚩' : '🚩'}
             </div>
-            <p style={{ opacity: 0.8, marginTop: '10px' }}>{risk.explanation}</p>
-          </div>
 
-          {risk.risk_label === 'HIGH' && (
-            <div className="next-steps-card">
-              <h3 style={{ color: 'var(--danger-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                ⚠️ ACTION NEEDED IMMEDIATELY
-              </h3>
-              <p style={{ fontSize: '0.9rem', marginTop: '10px' }}>You were exposed to a potentially harmful call. Do the following now:</p>
-              <ul style={{ fontSize: '0.85rem', marginTop: '10px', color: 'var(--text-secondary)' }}>
-                <li>1. Change your Bank/UPI passwords immediately.</li>
-                <li>2. Report the number to the Cyber Crime cell (1930).</li>
-                <li>3. Check your recent transactions for unauthorized charges.</li>
-                <li>4. DO NOT click any links sent via SMS from this caller.</li>
-              </ul>
-            </div>
-          )}
+            <h1 className="text-6xl font-black text-white mb-4 italic drop-shadow-lg text-center">
+              {risk.risk_label === 'HIGH' ? 'RED FLAG DETECTED' : 'SAFE CONVERSATION'}
+            </h1>
 
-          <div className="chatbot-container">
-            <div className="label-small">🛡️ VOICE SHIELD AI CHATBOT</div>
-            <div style={{
-              height: '300px',
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: '16px',
-              overflowY: 'auto',
-              padding: '1rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-              border: '1px solid var(--border-color)'
-            }}>
-              {chatMessages.map((msg, i) => (
-                <div key={i} className={`chat-bubble ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
-                  {msg.text}
+            {risk.risk_label === 'HIGH' ? (
+              <div className="flex flex-col items-center">
+                <img
+                  src="https://www.freeiconspng.com/uploads/skull-and-bones-icon-22.png"
+                  alt="Danger"
+                  className="w-48 h-48 danger-animate mb-8 invert"
+                />
+                <div className="bg-black/40 p-6 rounded-3xl backdrop-blur-xl border border-white/20 text-center max-w-md">
+                  <p className="text-xl font-bold text-white mb-2 uppercase tracking-tighter">🚨 HANG UP IMMEDIATELY 🚨</p>
+                  <p className="text-white/80 text-sm leading-tight">{risk.explanation}</p>
                 </div>
-              ))}
-              {isChatLoading && <div className="chat-bubble chat-ai">Typing...</div>}
-              <div ref={chatEndRef} />
+              </div>
+            ) : (
+              <div className="bg-white/20 p-6 rounded-3xl backdrop-blur-xl border border-white/10 text-center">
+                <ShieldCheck className="w-20 h-20 text-white mx-auto mb-4" />
+                <p className="text-white font-bold">MONITORING FOR SCAMS...</p>
+              </div>
+            )}
+
+            <Button
+              onClick={() => setView('summary')}
+              className="mt-12 bg-white text-black hover:bg-slate-200 h-14 px-10 rounded-2xl font-black text-lg shadow-2xl"
+            >
+              END CALL & REPORT
+            </Button>
+          </motion.div>
+        )}
+
+        {/* --- PAGE 4: SUMMARY & CHATBOT --- */}
+        {view === 'summary' && (
+          <motion.div key="summary" initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="min-h-screen bg-slate-950 p-6 pb-24">
+            <div className="text-center mb-8">
+              <div className="w-16 h-1 w-12 bg-primary mx-auto mb-4 rounded-full"></div>
+              <h2 className="text-3xl font-black tracking-tighter">SECURITY REPORT</h2>
+              <p className="text-slate-500 text-sm font-bold">Developed by Penjendru Varun</p>
             </div>
 
-            <form onSubmit={handleChatSubmit} style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask about fraud security..."
-                style={{
-                  flex: 1,
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px',
-                  padding: '12px',
-                  color: 'white',
-                  outline: 'none'
-                }}
-              />
-              <button type="submit" className="btn btn-primary" style={{ padding: '10px 20px' }}>Send</button>
-            </form>
-
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px' }}>
-              <span onClick={() => setChatInput("Can I share OTP?")} className="lang-btn" style={{ fontSize: '0.7rem' }}>Can I share OTP?</span>
-              <span onClick={() => setChatInput("What if money is gone?")} className="lang-btn" style={{ fontSize: '0.7rem' }}>What if money is gone?</span>
-              <span onClick={() => setChatInput("How to avoid fraud?")} className="lang-btn" style={{ fontSize: '0.7rem' }}>Fraud Prevention</span>
+            <div className={`p-8 rounded-[40px] border-2 text-center mb-8 ${risk.risk_label === 'HIGH' ? 'border-red-500 bg-red-500/10' : 'border-green-500 bg-green-500/10'}`}>
+              <span className="text-5xl mb-4 block">{risk.risk_label === 'HIGH' ? '🚫' : '✅'}</span>
+              <h3 className="text-2xl font-black">{risk.risk_label === 'HIGH' ? 'FRUD ATTEMPT STOPPED' : 'NO THREATS FOUND'}</h3>
+              <p className="text-sm mt-2 opacity-70">{risk.explanation}</p>
             </div>
-          </div>
 
-          <button className="btn btn-outline" style={{ marginTop: '2rem', width: '100%' }} onClick={() => { setView('dashboard'); setTranscript([]); setRisk({ risk_score: 0, risk_label: 'SAFE', explanation: 'No scam patterns detected yet. VoiceShield is monitoring.', triggers: [] }); }}>
-            Return to Dashboard
-          </button>
-        </div>
-      )}
+            {/* Action Recommendation */}
+            {risk.risk_label === 'HIGH' && (
+              <div className="bg-slate-900 border border-white/5 p-6 rounded-3xl mb-8">
+                <h4 className="text-red-500 font-black mb-4 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5" /> WHAT SHOULD I DO NOW?
+                </h4>
+                <ul className="space-y-3 text-sm font-semibold text-slate-300">
+                  <li className="flex gap-2"><span>1.</span> <span>Block the phone number immediately.</span></li>
+                  <li className="flex gap-2"><span>2.</span> <span>Change your UPI PIN and Bank Passwords.</span></li>
+                  <li className="flex gap-2"><span>3.</span> <span>Call 1930 to report this fraud attempt.</span></li>
+                  <li className="flex gap-2"><span>4.</span> <span>NEVER share details if caller mentions "KYC Suspended".</span></li>
+                </ul>
+              </div>
+            )}
 
-      <footer>
-        <p>© 2026 VoiceShield Premium Protection</p>
-        <p>Developed by: <b>Penjendru Varun</b></p>
-        <p style={{ fontSize: '0.7rem', marginTop: '5px' }}>System is set to Always-Active Mode (3-6 Days Persistence Enabled)</p>
-      </footer>
-    </main>
+            {/* AI CHATBOT SECTION */}
+            <div className="chatbot-area mt-12">
+              <div className="flex items-center gap-2 mb-4 px-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <h3 className="text-sm font-black uppercase tracking-widest text-primary">Fraud Advisory AI</h3>
+              </div>
+
+              <div className="bg-black/60 border border-white/5 rounded-[32px] overflow-hidden shadow-2xl">
+                <div className="h-[400px] overflow-y-auto p-6 flex flex-col gap-4">
+                  {chatMessages.map((msg, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: msg.role === 'user' ? 20 : -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-primary text-white self-end ml-12 rounded-tr-none' : 'bg-slate-800 text-slate-100 self-start mr-12 rounded-tl-none'}`}
+                    >
+                      {msg.text}
+                    </motion.div>
+                  ))}
+                </div>
+
+                <form onSubmit={handleChatSubmit} className="p-4 bg-white/5 border-t border-white/5 flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    className="bg-slate-900 border-none rounded-2xl px-5 h-12 flex-1 text-sm focus:ring-2 ring-primary transition-all outline-none"
+                    placeholder="Ask about security..."
+                  />
+                  <Button type="submit" className="h-12 w-12 p-0 rounded-2xl">
+                    <MessageSquare className="w-5 h-5" />
+                  </Button>
+                </form>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                <button onClick={() => setChatInput("Can I share OTP?")} className="text-[10px] bg-slate-800 px-3 py-1.5 rounded-full font-bold hover:bg-primary transition-colors">OTP Safety?</button>
+                <button onClick={() => setChatInput("UPI PIN rules?")} className="text-[10px] bg-slate-800 px-3 py-1.5 rounded-full font-bold hover:bg-primary transition-colors">UPI PIN rules?</button>
+                <button onClick={() => setChatInput("How to avoid fraud?")} className="text-[10px] bg-slate-800 px-3 py-1.5 rounded-full font-bold hover:bg-primary transition-colors">Prevention tips?</button>
+              </div>
+            </div>
+
+            <footer className="mt-16 text-center opacity-40">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1">VoiceShield Security Protocol v2.5</p>
+              <p className="text-[10px]">© 2026 • Penjendru Varun</p>
+            </footer>
+
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[80%]">
+              <Button onClick={() => setView('welcome')} variant="outline" className="w-full bg-black/40 backdrop-blur-md rounded-2xl h-14 font-black">RESET SYSTEM</Button>
+            </div>
+          </motion.div>
+        )}
+
+      </AnimatePresence>
+    </div>
   );
 }
