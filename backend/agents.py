@@ -73,27 +73,68 @@ OUTPUT FORMAT (JSON ONLY):
             return self.rule_based_analyze(transcript_history)
 
     def rule_based_analyze(self, history: List[dict]) -> RiskResult:
-        """Fallback rule-based engine when API is unavailable."""
+        """Robust fallback rule-based engine for real-time scam detection."""
         full_text = " ".join([t['text'].lower() for t in history])
         
-        if any(word in full_text for word in ["otp", "pin", "cvv", "password", "code"]):
-            return RiskResult(
-                risk_score=95,
-                risk_label="HIGH",
-                explanation="The caller is asking for sensitive security codes (OTP/PIN). Banks never ask for these.",
-                triggers=["REQUEST_OTP", "REQUEST_UPI_PIN", "FINANCIAL_RISK"]
-            )
-        elif any(word in full_text for word in ["lottery", "prize", "won", "refund", "cashback"]):
-            return RiskResult(
-                risk_score=50,
-                risk_label="MEDIUM",
-                explanation="Potential prize or refund scam detected. Proceed with caution.",
-                triggers=["PRIZE_LOTTERY_SCAM", "FAKE_REFUND"]
-            )
+        # High Risk Keywords (Direct Financial/Access Threats)
+        high_risk_words = [
+            "otp", "one time password", "digit code", "pin", "cvv", "password", 
+            "anydesk", "teamviewer", "rustdesk", "screen share", "kyc update",
+            "account blocked", "aadhar card", "pan card", "bank details"
+        ]
         
+        # Medium Risk Keywords (Urgency/Rewards)
+        med_risk_words = [
+            "lottery", "prize", "won", "reward", "kbc", "customer care", 
+            "refund", "cashback", "lucky draw", "urgent", "last chance"
+        ]
+
+        # Hindi/Hinglish Scam Keywords
+        hindi_scam_words = [
+            "khata band", "police case", "jail", "link pe click", 
+            "paisa won", "inam", "batchiye", "nikal jayega"
+        ]
+
+        detected_triggers = []
+        score = 0
+
+        # Check for High Risk
+        for word in high_risk_words:
+            if word in full_text:
+                score += 40
+                if "otp" in word or "code" in word: detected_triggers.append("REQUEST_OTP")
+                if "pin" in word: detected_triggers.append("REQUEST_UPI_PIN")
+                if "anydesk" in word: detected_triggers.append("REMOTE_ACCESS")
+
+        # Check for Medium Risk
+        for word in med_risk_words:
+            if word in full_text:
+                score += 15
+                detected_triggers.append("URGENCY_SCAM")
+
+        # Check for Hindi Scam
+        for word in hindi_scam_words:
+            if word in full_text:
+                score += 25
+                detected_triggers.append("HINDI_FRAUD_PATTERN")
+
+        # Deduplicate triggers
+        detected_triggers = list(set(detected_triggers)) if detected_triggers else ["NO_RISK_DETECTED"]
+
+        # Final Score and Label Mapping
+        if score >= 70:
+            label = "HIGH"
+            explanation = "ALARMING: The caller is asking for highly sensitive security information (OTP/PIN) or urgency tactics. HANG UP IMMEDIATELY."
+        elif score >= 25:
+            label = "MEDIUM"
+            explanation = "SUSPICIOUS: Potential mention of rewards, urgency, or account verification. This matches known scam patterns."
+        else:
+            label = "SAFE"
+            explanation = "VoiceShield hasn't detected any definitive scam patterns yet. Stay vigilant."
+
         return RiskResult(
-            risk_score=10,
-            risk_label="SAFE",
-            explanation="No immediate scam signals detected.",
-            triggers=["NO_RISK_SIGNAL"]
+            risk_score=min(score, 100),
+            risk_label=label,
+            explanation=explanation,
+            triggers=detected_triggers
         )
