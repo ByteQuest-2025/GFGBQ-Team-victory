@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -32,7 +32,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
     className,
 }) => {
     // Animation variants for the container and its children
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: { opacity: 0 },
         visible: {
             opacity: 1,
@@ -42,7 +42,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         },
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { y: 20, opacity: 0 },
         visible: {
             y: 0,
@@ -55,15 +55,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         },
     };
 
-    const imageVariants = {
+    const imageVariants: Variants = {
         hidden: { y: -50, opacity: 0 },
         visible: {
             y: 0,
             opacity: 1,
             transition: {
                 type: 'spring',
-                duration: 0.8,
-            },
+                stiffness: 70,
+                damping: 20
+            }
         },
     };
 
