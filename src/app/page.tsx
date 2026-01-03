@@ -1,5 +1,5 @@
 'use client';
-// Version 4.2.0 - UI Streamlining: Removed Welcome Hero
+// Version 4.2.1 - UI Streamlining: Removed Welcome Hero
 
 
 import { useState, useEffect, useRef } from 'react';
