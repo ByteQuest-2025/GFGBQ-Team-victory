@@ -1,3 +1,26 @@
+## Problem Statement
+**Real-Time Audio Fraud Detection for Scam Prevention**
+
+## Project Name
+**VoiceShield**
+
+## Team Name
+**Victory**
+
+## Deployed Link
+🚀 [https://gfgbq-team-victory.netlify.app/](https://gfgbq-team-victory.netlify.app/)
+
+## 2-Minute Demonstration Video
+🎥 [Watch Demo Video](https://1drv.ms/v/c/e29e5db419610e88/IQA4e_Hjb4gBSYR_Pp8rQHzIAaiUOI5mlQxJPkdGsGl_cgg?e=JrbCBm)
+
+## PPT Link
+📊 [View Presentation](https://1drv.ms/p/c/e29e5db419610e88/IQDx59SRd9VUSJszakTgCOGKASKZNXaDYEzYzHODRqINEdM?e=iCbpbO)
+
+## Repository Link
+💻 [GitHub Repository](https://github.com/ByteQuest-2025/GFGBQ-Team-victory)
+
+---
+
 # VoiceShield – Real-Time Scam Call Defender
 
 ![VoiceShield Logo](https://img.shields.io/badge/VoiceShield-Real--Time%20Protection-blue?style=for-the-badge)
