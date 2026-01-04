@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Bot, User } from 'lucide-react';
 import { RiskLabel } from '@/lib/store';
 import { Button } from './button';
+import { useTranslations } from '@/lib/translations';
 
 interface Message {
     id: string;
@@ -18,9 +19,11 @@ interface ChatbotProps {
     explanation: string;
     onClose?: () => void;
     language?: string;
+    embedded?: boolean;
 }
 
-export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProps) {
+export function Chatbot({ riskLabel, explanation, language = 'en', embedded = false }: ChatbotProps) {
+    const t = useTranslations(language);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
@@ -35,16 +38,17 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
             content: initialMessage,
             timestamp: new Date(),
         }]);
-    }, [riskLabel, explanation]);
+    }, [riskLabel, explanation, language]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     function getInitialMessage(risk: RiskLabel, exp: string): string {
+        // We use translations here if possible, or fallback to the provided strict texts
         if (risk === 'HIGH') {
             return `🚨 **URGENT WARNING**\n\n${exp}\n\n**What to do RIGHT NOW:**\n• Hang up immediately\n• Do NOT share OTP, PIN, CVV, or passwords\n• If you already shared details, contact your bank immediately\n• Call the official bank number from their website\n\nAsk me anything about protecting yourself.`;
-        } else if (risk === 'MEDIUM' || risk === 'LOW') {
+        } else if (risk === 'MEDIUM') {
             return `⚠️ **CAUTION ADVISED**\n\n${exp}\n\n**Safety tips:**\n• Never share OTP, PIN, CVV, or passwords\n• Verify caller identity through official channels\n• Banks never ask for credentials over phone\n\nI'm here to help - ask any questions!`;
         } else {
             return `✅ **Looking Safe So Far**\n\n${exp}\n\n**Stay vigilant:**\n• Never share OTP, PIN, CVV, or passwords\n• Even if caller seems legitimate, verify independently\n\nAsk me anything about scam protection!`;
@@ -65,7 +69,7 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
         setInput('');
         setIsTyping(true);
 
-        // Simulate AI response (in production, call backend API)
+        // Simulate AI response (demo mode)
         setTimeout(() => {
             const aiResponse = generateResponse(input, riskLabel);
             setMessages(prev => [...prev, {
@@ -111,22 +115,22 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
     }
 
     return (
-        <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t-2 border-gray-200 rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col"
+        <div
+            className={`${embedded ? 'flex-1 flex flex-col h-full bg-gray-900' : 'fixed bottom-0 left-0 right-0 z-40 bg-white border-t-2 border-gray-200 rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col'}`}
         >
             {/* Header */}
-            <div className={`p-4 border-b ${riskLabel === 'HIGH' ? 'bg-red-50 border-red-200' :
-                    riskLabel === 'MEDIUM' ? 'bg-orange-50 border-orange-200' :
-                        'bg-green-50 border-green-200'
+            <div className={`p-4 border-b ${embedded ? 'bg-gray-800 border-gray-700' :
+                    riskLabel === 'HIGH' ? 'bg-red-50 border-red-200' :
+                        riskLabel === 'MEDIUM' ? 'bg-orange-50 border-orange-200' :
+                            'bg-green-50 border-green-200'
                 }`}>
                 <div className="flex items-center gap-2">
-                    <Bot className="w-6 h-6 text-blue-600" />
+                    <Bot className={`w-6 h-6 ${embedded ? 'text-blue-400' : 'text-blue-600'}`} />
                     <div>
-                        <h3 className="font-bold text-lg">VoiceShield Assistant</h3>
-                        <p className="text-sm text-gray-600">
+                        <h3 className={`font-bold text-lg ${embedded ? 'text-white' : 'text-gray-900'}`}>
+                            VoiceShield Assistant
+                        </h3>
+                        <p className={`text-sm ${embedded ? 'text-gray-400' : 'text-gray-600'}`}>
                             {riskLabel === 'HIGH' ? 'This call looks risky. I will guide you.' :
                                 riskLabel === 'MEDIUM' ? 'Stay cautious. Let me help.' :
                                     'This looks safe, but let\'s stay careful.'}
@@ -153,23 +157,17 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
                             )}
 
                             <div
-                                className={`max-w-[80%] p-3 rounded-2xl ${msg.role === 'user'
-                                        ? 'bg-blue-600 text-white rounded-br-sm'
-                                        : 'bg-gray-100 text-gray-900 rounded-bl-sm'
+                                className={`max-w-[85%] p-3 rounded-2xl ${msg.role === 'user'
+                                    ? 'bg-blue-600 text-white rounded-br-sm'
+                                    : embedded ? 'bg-gray-800 text-gray-100 rounded-bl-sm border border-gray-700' : 'bg-gray-100 text-gray-900 rounded-bl-sm'
                                     }`}
                             >
-                                <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                                <div className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</div>
                                 <div className={`text-xs mt-1 ${msg.role === 'user' ? 'text-blue-100' : 'text-gray-500'
                                     }`}>
                                     {msg.timestamp.toLocaleTimeString()}
                                 </div>
                             </div>
-
-                            {msg.role === 'user' && (
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                                    <User className="w-5 h-5 text-green-600" />
-                                </div>
-                            )}
                         </motion.div>
                     ))}
                 </AnimatePresence>
@@ -183,7 +181,7 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                             <Bot className="w-5 h-5 text-blue-600" />
                         </div>
-                        <div className="bg-gray-100 p-3 rounded-2xl rounded-bl-sm">
+                        <div className={`p-3 rounded-2xl rounded-bl-sm ${embedded ? 'bg-gray-800' : 'bg-gray-100'}`}>
                             <div className="flex gap-1">
                                 <motion.div
                                     animate={{ scale: [1, 1.3, 1] }}
@@ -209,7 +207,7 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-gray-200 bg-white">
+            <div className={`p-4 border-t ${embedded ? 'bg-gray-800 border-gray-700' : 'border-gray-200 bg-white'}`}>
                 <div className="flex gap-2">
                     <input
                         type="text"
@@ -217,17 +215,18 @@ export function Chatbot({ riskLabel, explanation, language = 'en' }: ChatbotProp
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                         placeholder="Ask about this call or how to stay safe…"
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`flex-1 px-4 py-3 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ${embedded ? 'bg-gray-700 text-white placeholder-gray-400 border-transparent' : 'bg-white border border-gray-300 text-gray-900'
+                            }`}
                     />
                     <Button
                         onClick={handleSend}
                         disabled={!input.trim() || isTyping}
-                        className="rounded-full w-12 h-12 p-0"
+                        className="rounded-full w-12 h-12 p-0 bg-blue-600 hover:bg-blue-700"
                     >
                         <Send className="w-5 h-5" />
                     </Button>
                 </div>
             </div>
-        </motion.div>
+        </div>
     );
 }
