@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import json
 import asyncio
 from agents import ScamDetectionEngine, RiskResult
@@ -21,9 +22,27 @@ app.add_middleware(
 
 engine = ScamDetectionEngine()
 
+class TextAnalysisRequest(BaseModel):
+    text: str
+    language: str = "en"
+
 @app.get("/")
 async def root():
     return {"message": "VoiceShield API is running"}
+
+@app.post("/api/analyze-text")
+async def analyze_text(request: TextAnalysisRequest):
+    """Analyze text conversation for scam patterns"""
+    # Create a single transcript entry
+    transcript = [{
+        "speaker": "caller",
+        "text": request.text,
+        "language": request.language
+    }]
+    
+    # Use the same analysis engine
+    risk_result = await engine.analyze_transcript(transcript)
+    return risk_result.dict()
 
 @app.websocket("/ws/call/{call_id}")
 async def call_socket(websocket: WebSocket, call_id: str):
@@ -58,3 +77,4 @@ async def call_socket(websocket: WebSocket, call_id: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
