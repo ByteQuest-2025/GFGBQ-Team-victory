@@ -30,7 +30,7 @@ export function HomeScreen({ onStartLiveProtection, onAnalyzePastConversation }:
     const [daysRemaining, setDaysRemaining] = useState(6);
 
     // Recent calls (mock data for demo if empty)
-    const recentCalls = callSessions.length > 0 ? callSessions : [
+    const recentCalls = (callSessions?.length || 0) > 0 ? callSessions : [
         {
             id: "1",
             timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
