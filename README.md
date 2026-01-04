@@ -8,7 +8,7 @@
 **Victory**
 
 ## Deployed Link
-🚀 [https://gfgbq-team-victory.netlify.app/](https://gfgbq-team-victory.netlify.app/)
+🚀 [https://teamvictor-8tz7umz9u-penjendru01varuns-projects.vercel.app/](https://teamvictor-8tz7umz9u-penjendru01varuns-projects.vercel.app/)
 
 ## 2-Minute Demonstration Video
 🎥 [Watch Demo Video](https://1drv.ms/v/c/e29e5db419610e88/IQA4e_Hjb4gBSYR_Pp8rQHzIAaiUOI5mlQxJPkdGsGl_cgg?e=JrbCBm)
