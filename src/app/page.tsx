@@ -1,5 +1,5 @@
 'use client';
-// Version 4.3.2 - CONFIRMED: Centered Hero with Feature Cards
+// Version 4.4.0 - EXACT COLORS MATCHED + 6-DAY LISTENING
 
 
 import { useState, useEffect, useRef } from 'react';
@@ -254,7 +254,7 @@ export default function VoiceShield() {
             >
               <Button
                 onClick={() => { setView('monitoring'); setIsStarted(true); }}
-                className="h-14 px-10 rounded-2xl text-lg font-bold bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow-[0_10px_40px_-10px_rgba(99,102,241,0.6)] flex items-center gap-3 active:scale-95 transition-all"
+                className="h-14 px-10 rounded-2xl text-lg font-bold bg-[#7c3aed] hover:bg-[#6d28d9] text-white shadow-[0_10px_40px_-10px_rgba(124,58,237,0.6)] flex items-center gap-3 active:scale-95 transition-all"
               >
                 <div className="w-5 h-5 flex items-center justify-center bg-white/20 rounded-full">
                   <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
